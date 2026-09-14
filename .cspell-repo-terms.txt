@@ -233,6 +233,7 @@ Rootfs
 RustCrypto
 RustSec
 Rwandan
+SECP
 SGHA
 SIEM
 SIGSTOP
