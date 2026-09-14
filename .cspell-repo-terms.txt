@@ -507,6 +507,7 @@ isatty
 isawaitable
 iscoroutine
 isdigit
+isdir
 isdisjoint
 isfile
 isfinite
@@ -907,6 +908,7 @@ unconfigured
 unicodedata
 uninspectable
 unioned
+unlogged
 unmigrated
 unparse
 unparseable
