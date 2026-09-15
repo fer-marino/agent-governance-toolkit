@@ -773,15 +773,17 @@ def govern(
 
     Example with a relational rule the YAML DSL can't express::
 
-        # policy.rego:
+        # policy.rego (v0 syntax - OPAEvaluator runs `opa eval
+        # --v0-compatible`; a v1-syntax `default allow := false` /
+        # `allow if ...` policy fails to compile under it):
         #   package agentmesh
-        #   default allow := false
+        #   default allow = false
         #   # Field-vs-field: works either wrapped or not, since both sides
         #   # get the same {"value": ...} treatment.
-        #   allow if input.caller_mission == input.doc_mission
+        #   allow { input.caller_mission == input.doc_mission }
         #   # Field-vs-literal: needs .value - input.caller_role == "auditor"
         #   # would silently never match.
-        #   allow if input.caller_role.value == "auditor"
+        #   allow { input.caller_role.value == "auditor" }
         safe_read = govern(
             read_doc, policy="allow-all.yaml", rego_path="policy.rego",
         )
