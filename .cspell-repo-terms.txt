@@ -1200,8 +1200,12 @@ SPKI
 CREAT
 ELOOP
 ENOSPC
+EPERM
 FCHMOD
 WRONLY
 containerised
 fchmod
+fileno
+fromhex
+fstat
 serialisation
