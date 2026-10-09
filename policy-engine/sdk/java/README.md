@@ -76,6 +76,13 @@ The SDK looks for `agent_control_specification.dll`, `libagent_control_specifica
 
 A missing library fails with an `AcsException` that says how to build it.
 
+### Shipping the library inside the jar
+
+`./gradlew jar -Pacs.native.library=<built library>` stages the library under `build/native/<os>-<arch>/` (`stageNativeLibrary`) and puts it in the
+jar at `/native/<os>-<arch>/<file>`, where the loader finds it with no property or environment variable; the jar then runs on that platform only.
+For a jar that serves several platforms, build the library on each (a CI matrix), collect the files as `<os>-<arch>/<file>` (`windows-x86_64`,
+`linux-x86_64`, `linux-aarch64`, `macos-aarch64`, ...) in one directory and pass it with `-Pacs.native.bundle=<dir>`.
+
 Run the JVM with `--enable-native-access=ALL-UNNAMED` (or the module name) so that Java 24 and later do not warn about native access.
 
 For Rego policies the bundled dispatcher runs the OPA executable. Put `opa` on the `PATH`, set `ACS_OPA_PATH` before the JVM starts, or call
