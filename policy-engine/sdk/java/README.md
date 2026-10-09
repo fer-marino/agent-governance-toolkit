@@ -70,7 +70,7 @@ The module `agent-control-specification-spring-ai` (Spring AI 2.x, `./gradlew :s
 - `AgentControlAdvisor` is a `CallAdvisor`: `pre_model_call` on the messages, `post_model_call` on the answer. Only `allow` passes; a `deny`, a failure
   or a `transform` blocks (a Spring AI request or response cannot be rewritten faithfully; use `runModel` for transforms).
 
-Not covered yet: streaming (`StreamAdvisor`) and an auto-configuration for Spring Boot.
+A streamed call is buffered (checked as one answer, then emitted). Not covered yet: an auto-configuration for Spring Boot.
 
 ## The native library
 

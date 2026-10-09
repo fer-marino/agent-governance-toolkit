@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
+import org.springframework.ai.chat.client.advisor.api.StreamAdvisorChain;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
@@ -33,6 +34,7 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.ai.tool.definition.ToolDefinition;
+import reactor.core.publisher.Flux;
 
 class SpringAiGuardTest {
 
@@ -180,6 +182,40 @@ class SpringAiGuardTest {
 
         assertThrows(AgentControlBlockedException.class,
                 () -> advisor.adviseCall(ChatClientRequest.builder().prompt(new Prompt("hello")).build(), chain(new AtomicReference<>(), "leak")));
+    }
+
+    private static StreamAdvisorChain streamChain(List<String> chunks) {
+        return (StreamAdvisorChain) Proxy.newProxyInstance(StreamAdvisorChain.class.getClassLoader(), new Class<?>[] {StreamAdvisorChain.class},
+                (proxy, method, args) -> {
+                    if (method.getName().equals("nextStream")) {
+                        return Flux.fromIterable(chunks).map(text -> ChatClientResponse.builder()
+                                .chatResponse(new ChatResponse(List.of(new Generation(new AssistantMessage(text))))).build());
+                    }
+                    throw new UnsupportedOperationException(method.getName());
+                });
+    }
+
+    @Test
+    void aStreamIsBufferedCheckedAsOneAnswerAndThenEmitted() {
+        List<InterventionPoint> asked = new ArrayList<>();
+        AgentControlAdvisor advisor = new AgentControlAdvisor(control(asked, p -> Decision.ALLOW));
+
+        List<ChatClientResponse> out = advisor.adviseStream(ChatClientRequest.builder().prompt(new Prompt("hello")).build(),
+                streamChain(List.of("a", "b", "c"))).collectList().block();
+
+        assertEquals(3, out.size());
+        assertEquals(List.of(InterventionPoint.PRE_MODEL_CALL, InterventionPoint.POST_MODEL_CALL), asked);
+    }
+
+    @Test
+    void aStreamWhoseAnswerIsDeniedEmitsNothing() {
+        AgentControlAdvisor advisor = new AgentControlAdvisor(control(new ArrayList<>(), p -> p == InterventionPoint.POST_MODEL_CALL ? Decision.DENY : Decision.ALLOW));
+        List<ChatClientResponse> seen = new ArrayList<>();
+
+        assertThrows(AgentControlBlockedException.class, () -> advisor.adviseStream(ChatClientRequest.builder().prompt(new Prompt("hello")).build(),
+                streamChain(List.of("leak", "age"))).doOnNext(seen::add).collectList().block());
+
+        assertTrue(seen.isEmpty(), "no chunk reached the caller");
     }
 
     @Test
