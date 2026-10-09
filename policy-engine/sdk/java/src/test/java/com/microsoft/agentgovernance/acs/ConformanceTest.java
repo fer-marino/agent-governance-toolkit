@@ -14,13 +14,17 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.DynamicTest;
 import org.junit.jupiter.api.TestFactory;
 import org.junit.jupiter.api.condition.EnabledIf;
+import org.opentest4j.TestAbortedException;
 
 /**
  * Runs the shared conformance corpus ({@code tests/conformance/cases}) through the Java binding, the way the Python runner
@@ -32,6 +36,9 @@ import org.junit.jupiter.api.condition.EnabledIf;
 class ConformanceTest {
 
     private static final ObjectMapper JSON = new ObjectMapper();
+
+    /** case id -> {status, detail}; written to {@code ACS_CONFORMANCE_RESULTS} (if set) in the format of {@code tests/conformance/run_parity.py}. */
+    private static final Map<String, String[]> RESULTS = new ConcurrentHashMap<>();
 
     @TestFactory
     Stream<DynamicTest> everyCaseOfTheSharedCorpus() throws IOException {
@@ -45,9 +52,45 @@ class ConformanceTest {
         List<DynamicTest> tests = new ArrayList<>();
         for (Path file : files) {
             JsonNode testCase = JSON.readTree(file.toFile());
-            tests.add(DynamicTest.dynamicTest(testCase.path("id").asText(file.getFileName().toString()), () -> run(testCase)));
+            tests.add(DynamicTest.dynamicTest(testCase.path("id").asText(file.getFileName().toString()), () -> record(testCase.path("id").asText(), testCase)));
         }
         return tests.stream();
+    }
+
+    private static void record(String id, JsonNode testCase) throws Exception {
+        try {
+            run(testCase);
+            RESULTS.put(id, new String[] {"pass", ""});
+        } catch (TestAbortedException e) {
+            RESULTS.put(id, new String[] {"skip", String.valueOf(e.getMessage())});
+            throw e;
+        } catch (Throwable e) {
+            RESULTS.put(id, new String[] {"fail", String.valueOf(e.getMessage())});
+            throw e;
+        }
+    }
+
+    @AfterAll
+    static void writeResults() throws IOException {
+        String target = System.getenv("ACS_CONFORMANCE_RESULTS");
+        if (target == null || target.isBlank()) {
+            return;
+        }
+        var report = JSON.createObjectNode();
+        report.put("sdk", "java");
+        report.put("timestamp", java.time.Instant.now().truncatedTo(java.time.temporal.ChronoUnit.SECONDS).toString());
+        var results = report.putArray("results");
+        RESULTS.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(e -> {
+            var item = results.addObject();
+            item.put("case", e.getKey());
+            item.put("status", e.getValue()[0]);
+            item.put("detail", e.getValue()[1]);
+        });
+        Path out = Path.of(target);
+        if (out.getParent() != null) {
+            Files.createDirectories(out.getParent());
+        }
+        Files.writeString(out, JSON.writerWithDefaultPrettyPrinter().writeValueAsString(report) + "\n");
     }
 
     private static void run(JsonNode testCase) throws Exception {
