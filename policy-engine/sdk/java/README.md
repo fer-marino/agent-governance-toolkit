@@ -59,6 +59,19 @@ to the action (`$snap.tool_call.args`) replaces it whole, a target inside it (`$
 replaces that member only. A target that is not part of the value the action receives (the tool *name*, the whole snapshot) cannot be applied, so the
 action is blocked with `host_error:transform_target_unsupported` instead of running on a wrong value.
 
+## Spring AI and MCP (`spring-ai/`)
+
+The module `agent-control-specification-spring-ai` (Spring AI 2.x, `./gradlew :spring-ai:build`) puts the engine in front of a Spring AI agent:
+
+- `GuardedToolCallback` wraps a `ToolCallback`: `pre_tool_call` before the tool runs, `post_tool_call` before the model sees the result. A refusal
+  is returned to the model as text (`NOT EXECUTED: ...`, replaceable) so the chat carries on without the tool.
+- `GuardedToolCallbackProvider` wraps a whole `ToolCallbackProvider`. Spring AI's MCP client (`SyncMcpToolCallbackProvider`) is one, so this is the
+  MCP adapter: `new GuardedToolCallbackProvider(control, mcpProvider).getToolCallbacks()`. List the MCP tools under `tools:` in the manifest.
+- `AgentControlAdvisor` is a `CallAdvisor`: `pre_model_call` on the messages, `post_model_call` on the answer. Only `allow` passes; a `deny`, a failure
+  or a `transform` blocks (a Spring AI request or response cannot be rewritten faithfully; use `runModel` for transforms).
+
+Not covered yet: streaming (`StreamAdvisor`) and an auto-configuration for Spring Boot.
+
 ## The native library
 
 Build it once from `policy-engine`:

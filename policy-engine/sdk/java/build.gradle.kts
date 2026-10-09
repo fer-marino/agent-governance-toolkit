@@ -65,9 +65,11 @@ val bundledNative = providers.gradleProperty("acs.native.bundle")
 
 val stageNativeLibrary by tasks.registering(Copy::class) {
     description = "Copies the built native library (-Pacs.native.library) to build/native/<os>-<arch>/ so that the jar carries it."
-    val library = providers.gradleProperty("acs.native.library")
-    onlyIf { library.isPresent }
-    from(library.map { file(it) })
+    val library = providers.gradleProperty("acs.native.library").orNull
+    onlyIf { library != null }
+    if (library != null) {
+        from(file(library))
+    }
     into(stagedNative.map { it.dir(platformName) })
 }
 
