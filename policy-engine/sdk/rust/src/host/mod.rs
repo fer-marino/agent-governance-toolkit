@@ -95,14 +95,14 @@ pub fn default_host_annotator_dispatcher_with_limits(
     }
 }
 
-/// Select AGT's OPA policy dispatcher independently of Cargo feature unification.
+/// Select AGT's bundled policy dispatcher independently of Cargo feature unification.
 pub fn default_host_policy_dispatcher(
     manifest: &Manifest,
 ) -> Result<Arc<dyn PolicyDispatcher>, RuntimeError> {
     default_host_policy_dispatcher_with_limits(manifest, Limits::default())
 }
 
-/// Select the OPA policy default with explicit artifact download limits.
+/// Select the bundled policy dispatcher with explicit artifact download limits.
 pub fn default_host_policy_dispatcher_with_limits(
     manifest: &Manifest,
     limits: Limits,
