@@ -327,7 +327,7 @@ fn assert_ffi_uses_opa() {
 }
 
 #[test]
-fn mixed_manifest_regos_fail_closed_when_opa_is_missing() {
+fn mixed_manifest_rego_fails_closed_when_opa_is_missing() {
     const MIXED_MANIFEST: &str = r#"agent_control_specification_version: 0.4.0-alpha.1
 policies:
   rego_rule:
@@ -364,7 +364,7 @@ tools:
         let output = Command::new(env::current_exe().unwrap())
             .args([
                 "--exact",
-                "mixed_manifest_regos_fail_closed_when_opa_is_missing",
+                "mixed_manifest_rego_fails_closed_when_opa_is_missing",
             ])
             .env("AGT_OPA_BACKEND_CHILD", "1")
             .env("ACS_OPA_PATH", directory.path().join("missing-opa"))
