@@ -198,7 +198,9 @@ fn default_policy_dispatcher_rejects_non_rego_policies() {
     assert!(runtime.is_null(), "non-rego policy must fail the build");
     let message = take_err(err);
     assert!(
-        message.contains("only Rego and Cedar policies"),
+        message.contains("only Rego and Cedar policies")
+            && message.contains("policy 'input_policy'")
+            && message.contains("engine 'custom'"),
         "unexpected error message: {message}"
     );
 }

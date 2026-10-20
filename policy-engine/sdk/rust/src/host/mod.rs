@@ -102,15 +102,43 @@ pub fn default_host_policy_dispatcher(
     default_host_policy_dispatcher_with_limits(manifest, Limits::default())
 }
 
+/// A policy dispatcher that routes each invocation by engine type, so Cargo
+/// feature unification cannot change where a policy runs: Rego always goes to
+/// the OPA runner this host selects, Cedar always to the built-in in-process
+/// evaluator. The upstream `BindingPolicyDispatcher` cannot promise that,
+/// because it picks in-process Rego (regorus) whenever any crate in the build
+/// enables `agent-control-spec/rego`.
+struct EngineRoutingPolicyDispatcher {
+    rego: agent_control_spec::OpaPolicyDispatcher,
+    cedar: agent_control_spec::CedarBuiltinDispatcher,
+}
+
+impl PolicyDispatcher for EngineRoutingPolicyDispatcher {
+    fn evaluate(
+        &self,
+        invocation: &agent_control_spec::PreparedPolicyInvocation,
+    ) -> Result<JsonValue, RuntimeError> {
+        match invocation {
+            agent_control_spec::PreparedPolicyInvocation::Rego(_) => self.rego.evaluate(invocation),
+            agent_control_spec::PreparedPolicyInvocation::Cedar(_) => {
+                self.cedar.evaluate(invocation)
+            }
+            other => Err(RuntimeError::PolicyInvocationFailed(format!(
+                "default policy dispatcher supports only Rego and Cedar policies; got '{}'",
+                other.engine_type()
+            ))),
+        }
+    }
+}
+
 /// Select the bundled policy dispatcher with explicit artifact download limits.
 pub fn default_host_policy_dispatcher_with_limits(
     manifest: &Manifest,
     limits: Limits,
 ) -> Result<Arc<dyn PolicyDispatcher>, RuntimeError> {
-    // A manifest that is all Rego keeps AGT's promise of OPA executable selection and bundle behavior. A manifest that
-    // also declares Cedar goes through ACS's binding dispatcher, which runs Cedar in process and
-    // still sends Rego to OPA (this crate enables `opa`, not `rego`); anything else needs a host dispatcher.
-    let mut all_rego = true;
+    // Every engine is routed explicitly, independent of Cargo feature unification: Rego goes to the
+    // OPA runner AGT selects (executable and bundle behavior, fail-closed without OPA), Cedar to the
+    // built-in in-process evaluator; anything else needs a host dispatcher.
     for (name, policy) in &manifest.policies {
         let engine = policy.engine_type();
         if !matches!(engine, "rego" | "cedar") {
@@ -118,20 +146,13 @@ pub fn default_host_policy_dispatcher_with_limits(
                 "default policy dispatcher supports only Rego and Cedar policies; policy '{name}' uses engine '{engine}'"
             )));
         }
-        all_rego &= engine == "rego";
     }
-    if !all_rego {
-        return Ok(Arc::new(
-            agent_control_spec::dispatchers::BindingPolicyDispatcher::with_limits(limits),
-        ));
-    }
-    // ACS prefers in-process Rego when any consumer enables that feature.
-    // AGT's existing API promises OPA executable selection and bundle behavior.
-    Ok(Arc::new(
-        agent_control_spec::OpaPolicyDispatcher::with_runner(
+    Ok(Arc::new(EngineRoutingPolicyDispatcher {
+        rego: agent_control_spec::OpaPolicyDispatcher::with_runner(
             agent_control_spec::OpaRegoRunner::from_environment().with_limits(limits),
         ),
-    ))
+        cedar: agent_control_spec::CedarBuiltinDispatcher::new(),
+    }))
 }
 
 /// Return true for IP destinations a manifest URL fetch must not target.
